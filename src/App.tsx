@@ -19,14 +19,14 @@ import {
 import { Icon } from './components/Icon';
 import { PageCard, PageThumb, sourceColor } from './components/PageCard';
 import { PreviewModal } from './components/PreviewModal';
+import { SaveDialog, type SaveFormat } from './components/SaveDialog';
 import { Sheet } from './components/Sheet';
 import { downloadFile, formatBytes, safeFileName } from './lib/download';
 import { buildPdf, loadSource, normalizeRotation, PdfLoadError, verifyOutput, type VerifyResult } from './lib/pdf';
 import type { PageItem, SourceDoc } from './lib/types';
 import { lockTouchScroll, SmartTouchSensor, type SmartTouchOptions } from './lib/sensors';
 import { useTheme } from './lib/theme';
-import { MOBILE_QUERY, useMediaQuery } from './lib/useMediaQuery';
-import { buildXml } from './lib/xml';
+import { buildAps } from './lib/aps';
 
 // ---------------------------------------------------------------------------
 // Undo/redo history for the page layout
@@ -124,11 +124,8 @@ export default function App() {
   const [busy, setBusy] = useState<null | 'pdf' | 'xml'>(null);
   const [verify, setVerify] = useState<VerifyResult | null>(null);
   const [outputName, setOutputName] = useState('');
-  const [embedPdf, setEmbedPdf] = useState(true);
-  const [includeItems, setIncludeItems] = useState(false);
-  const [xmlMenu, setXmlMenu] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
-  const isMobile = useMediaQuery(MOBILE_QUERY);
+  const [saveAs, setSaveAs] = useState<SaveFormat | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -381,12 +378,12 @@ export default function App() {
     return bytes;
   }, [pages, sourceMap, toast]);
 
-  const exportPdf = useCallback(async () => {
+  const exportPdf = useCallback(async (name: string) => {
     setBusy('pdf');
     try {
       const bytes = await buildVerified();
       if (!bytes) return;
-      downloadFile(bytes, `${safeFileName(outputName)}.pdf`, 'application/pdf');
+      downloadFile(bytes, `${safeFileName(name)}.pdf`, 'application/pdf');
       toast('success', `Đã tải PDF · ${pages.length} trang · ${formatBytes(bytes.length)}`);
     } catch (err) {
       console.error('PDF export failed', err);
@@ -394,16 +391,16 @@ export default function App() {
     } finally {
       setBusy(null);
     }
-  }, [buildVerified, outputName, pages.length, toast]);
+  }, [buildVerified, pages.length, toast]);
 
-  const exportXml = useCallback(async () => {
+  const exportXml = useCallback(async (name: string) => {
     setBusy('xml');
-    setXmlMenu(false);
     try {
       const bytes = await buildVerified();
       if (!bytes) return;
-      const xml = await buildXml(pages, sourceMap, { embedPdf: embedPdf ? bytes : null, includeItems });
-      downloadFile(xml, `${safeFileName(outputName)}.xml`, 'application/xml;charset=utf-8');
+      // Aspose APS layout XML, built from the verified output PDF.
+      const xml = await buildAps(bytes);
+      downloadFile(xml, `${safeFileName(name)}.xml`, 'application/xml;charset=utf-8');
       toast('success', `Đã tải XML · ${pages.length} trang`);
     } catch (err) {
       console.error('XML export failed', err);
@@ -411,7 +408,16 @@ export default function App() {
     } finally {
       setBusy(null);
     }
-  }, [buildVerified, pages, sourceMap, embedPdf, includeItems, outputName, toast]);
+  }, [buildVerified, pages.length, toast]);
+
+  const saveFile = useCallback(
+    (format: SaveFormat, name: string) => {
+      setSaveAs(null);
+      setOutputName(name); // remembered for the next download
+      void (format === 'pdf' ? exportPdf(name) : exportXml(name));
+    },
+    [exportPdf, exportXml],
+  );
 
   // -------------------------------------------------------------------------
   // Keyboard shortcuts & menus
@@ -420,7 +426,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (preview !== null || xmlMenu || confirmClose || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) {
+      if (preview !== null || confirmClose || saveAs || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) {
         return;
       }
       const mod = e.ctrlKey || e.metaKey;
@@ -443,41 +449,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [preview, xmlMenu, confirmClose, pages, selected, deleteKeys, undo, redo]);
-
-  // Desktop dropdown: close on outside click / Esc (the mobile bottom sheet handles its own).
-  useEffect(() => {
-    if (!xmlMenu || isMobile) return;
-    const close = (e: PointerEvent) => {
-      if (!(e.target as HTMLElement).closest('.split')) setXmlMenu(false);
-    };
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setXmlMenu(false);
-    window.addEventListener('pointerdown', close);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('pointerdown', close);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [xmlMenu, isMobile]);
-
-  const xmlOptions = (
-    <div className="option-list">
-      <label className="option">
-        <input type="checkbox" checked={embedPdf} onChange={(e) => setEmbedPdf(e.target.checked)} />
-        <span>
-          Nhúng bản PDF đầy đủ
-          <small>Giữ nguyên tài liệu trong XML (base64)</small>
-        </span>
-      </label>
-      <label className="option">
-        <input type="checkbox" checked={includeItems} onChange={(e) => setIncludeItems(e.target.checked)} />
-        <span>
-          Kèm tọa độ từng cụm chữ
-          <small>Dành cho phần mềm cần vị trí chính xác</small>
-        </span>
-      </label>
-    </div>
-  );
+  }, [preview, confirmClose, saveAs, pages, selected, deleteKeys, undo, redo]);
 
   // -------------------------------------------------------------------------
   // Render
@@ -523,19 +495,9 @@ export default function App() {
         <Logo />
         {hasDocs ? (
           <>
-            <div className="doc-name">
-              {/* The hidden mirror sizes the input to its text. */}
-              <span className="doc-name-field" data-value={outputName || 'Tên file'}>
-                <input
-                  value={outputName}
-                  onChange={(e) => setOutputName(e.target.value)}
-                  placeholder="Tên file"
-                  spellCheck={false}
-                  aria-label="Tên file khi tải xuống"
-                  size={1}
-                />
-              </span>
-              <span className="muted">.pdf</span>
+            <div className="doc-name" title={sources.map((s) => s.name).join('\n')}>
+              <span className="doc-title">{sources[0].name}</span>
+              {multiFile && <span className="muted">+{sources.length - 1} file</span>}
             </div>
             <div className="header-actions">
               {verify?.ok && (
@@ -543,27 +505,11 @@ export default function App() {
                   <Icon name="check" size={14} /> Đã xác minh {verify.pagesChecked}/{verify.pagesChecked} trang
                 </span>
               )}
-              <div className="split">
-                <button className="btn" onClick={exportXml} disabled={!!busy}>
-                  {busy === 'xml' ? <span className="spinner" /> : <Icon name="download" size={16} />}
-                  XML
-                </button>
-                <button
-                  className="btn split-toggle"
-                  onClick={() => setXmlMenu((v) => !v)}
-                  aria-label="Tùy chọn XML"
-                  aria-expanded={xmlMenu}
-                >
-                  <Icon name="chevronDown" size={16} />
-                </button>
-                {xmlMenu && !isMobile && (
-                  <div className="menu">
-                    <div className="menu-title">Tùy chọn XML</div>
-                    {xmlOptions}
-                  </div>
-                )}
-              </div>
-              <button className="btn primary" onClick={exportPdf} disabled={!!busy}>
+              <button className="btn xml-btn" onClick={() => setSaveAs('xml')} disabled={!!busy}>
+                {busy === 'xml' ? <span className="spinner" /> : <Icon name="download" size={16} />}
+                Tải XML
+              </button>
+              <button className="btn primary" onClick={() => setSaveAs('pdf')} disabled={!!busy}>
                 {busy === 'pdf' ? <span className="spinner" /> : <Icon name="download" size={16} />}
                 Tải PDF
               </button>
@@ -770,19 +716,13 @@ export default function App() {
         </div>
       )}
 
-      {xmlMenu && isMobile && (
-        <Sheet
-          title="Tùy chọn XML"
-          onClose={() => setXmlMenu(false)}
-          footer={
-            <button className="btn primary block" onClick={exportXml} disabled={!!busy}>
-              {busy === 'xml' ? <span className="spinner" /> : <Icon name="download" size={16} />}
-              Tải XML
-            </button>
-          }
-        >
-          {xmlOptions}
-        </Sheet>
+      {saveAs && (
+        <SaveDialog
+          format={saveAs}
+          initialName={outputName}
+          onCancel={() => setSaveAs(null)}
+          onSave={(name) => saveFile(saveAs, name)}
+        />
       )}
 
       {confirmClose && (

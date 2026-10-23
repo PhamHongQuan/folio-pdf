@@ -24,34 +24,46 @@ Web app giúp thủ quỹ siêu thị sắp xếp trang PDF ngay trên trình du
 Giới hạn: bookmark (outline) và form tương tác cấp tài liệu không được chuyển sang file mới;
 nội dung hiển thị của trang (kể cả giá trị đã điền trong form) vẫn giữ nguyên.
 
-## Định dạng XML
+## Định dạng XML (Aspose APS)
+
+Nút **Tải XML** xuất theo định dạng APS của Aspose (giống công cụ PDF → XML của Aspose):
 
 ```xml
-<PdfDocument pageCount="…">
-  <Metadata>…</Metadata>
-  <Sources><Source id="1" fileName="…" sha256="…"/></Sources>
-  <Pages>
-    <Page number="1" sourceId="1" sourcePage="3" width="595.28" height="841.89" rotation="0" hasText="true">
-      <Lines><Line y="780">PHIẾU THU SỐ 0001</Line>…</Lines>
-      <TextItems>…</TextItems>            <!-- tùy chọn: tọa độ từng cụm chữ -->
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<Aps>
+  <Group>
+    <Page Width="595" Height="842" PaperTray="0">
+      <Canvas><Canvas>
+        <Clip>…khung trang…</Clip>
+        <Canvas RenderTransform="a b c d e f">
+          <Image ResourceId="1"><Origin X="0" Y="0" /><Size Width="1916" Height="2556" /></Image>
+        </Canvas>
+        …
+      </Canvas></Canvas>
     </Page>
-  </Pages>
-  <EmbeddedPdf encoding="base64" sha256="…">…</EmbeddedPdf>   <!-- tùy chọn: bản PDF đầy đủ -->
-</PdfDocument>
+  </Group>
+  <Resources><Resource Id="1">…base64…</Resource></Resources>
+</Aps>
 ```
 
-`Lines` được dựng từ vị trí chữ trong PDF. Văn bản được trích xuất đúng như PDF lưu trữ;
-PDF dạng ảnh scan sẽ có `hasText="false"` (không có OCR). `EmbeddedPdf` chứa chính xác file PDF đã xuất
-(cùng SHA-256), nên XML luôn mang theo bản gốc không mất mát.
+- Toạ độ tính bằng point, gốc ở góc trên-trái; UTF-8 có BOM, xuống dòng CRLF, thụt lề tab.
+- Ảnh JPEG được nhúng **nguyên bản byte gốc** trong PDF (không nén lại); ảnh khác lưu PNG không mất dữ liệu.
+  Ảnh trùng nội dung chỉ lưu một lần.
+- Liên kết (Hyperlink) gắn vào ảnh nằm dưới vùng liên kết, đường kẻ/hình vẽ là `Path`, chữ là `Glyphs`.
+- Đã đối chiếu với file Aspose thật (PDF scan 9 trang): phần cấu trúc trùng khớp từng byte.
+  Phần biểu diễn chữ/hình vẽ cho PDF có chữ được suy ra theo cùng phong cách (chưa có mẫu Aspose để đối chiếu).
+
+Lưu ý: đây là XML mô tả bố cục trang, **không phải** XML hóa đơn điện tử theo chuẩn của Tổng cục Thuế.
 
 ## Cấu trúc
 
 ```
 src/
   App.tsx                 # Giao diện, lịch sử hoàn tác, xuất file
-  components/             # PageCard, PageCanvas (thumbnail), PreviewModal, Icon
+  components/             # PageCard, PageCanvas (thumbnail), PreviewModal, Sheet, Icon
   lib/pdf.ts              # Đọc PDF, dựng PDF mới, kiểm tra toàn vẹn
-  lib/xml.ts              # Xuất XML
+  lib/aps.ts              # Xuất XML định dạng Aspose APS
+  lib/sensors.ts          # Kéo thả cảm ứng (tay cầm ⠿ / nhấn giữ)
 api/health.py             # Python serverless function (Vercel) – GET /api/health
 scripts/copy-pdfjs-assets.mjs  # Copy font/cmap của pdf.js vào public/ (tự chạy khi dev/build)
 ```

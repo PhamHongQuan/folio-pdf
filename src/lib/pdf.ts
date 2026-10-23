@@ -40,8 +40,17 @@ export async function sha256Hex(bytes: Uint8Array): Promise<string> {
 }
 
 /** pdf.js transfers the buffer it receives to its worker, so always hand it a copy. */
-export function openForViewing(bytes: Uint8Array): Promise<PDFDocumentProxy> {
-  return getDocument({ ...PDFJS_OPTIONS, data: bytes.slice() }).promise;
+export function openForViewing(
+  bytes: Uint8Array,
+  { rawImages = false }: { rawImages?: boolean } = {},
+): Promise<PDFDocumentProxy> {
+  return getDocument({
+    ...PDFJS_OPTIONS,
+    data: bytes.slice(),
+    // Raw pixel buffers instead of ImageBitmaps: bitmaps are alpha-premultiplied, which
+    // can shift colours of semi-transparent pixels. Used when exporting image data.
+    ...(rawImages ? { isOffscreenCanvasSupported: false } : {}),
+  }).promise;
 }
 
 function hasPdfHeader(bytes: Uint8Array): boolean {
@@ -125,7 +134,7 @@ export function primarySource(pages: PageItem[], sources: Map<string, SourceDoc>
 // Document metadata (/Info dictionary)
 // ---------------------------------------------------------------------------
 
-export const META_KEYS = [
+const META_KEYS = [
   'Title',
   'Author',
   'Subject',
@@ -135,7 +144,7 @@ export const META_KEYS = [
   'CreationDate',
   'ModDate',
 ] as const;
-export type MetaKey = (typeof META_KEYS)[number];
+type MetaKey = (typeof META_KEYS)[number];
 
 function infoDict(doc: PDFDocument): PDFDict | undefined {
   const ref = doc.context.trailerInfo.Info;
@@ -164,29 +173,6 @@ function copyMetadata(from: PDFDocument, to: PDFDocument): void {
   }
 }
 
-/** Human-readable metadata for display/XML; dates as ISO when valid, otherwise the raw text. */
-export function readMetadata(doc: PDFDocument): Partial<Record<MetaKey, string>> {
-  const result: Partial<Record<MetaKey, string>> = {};
-  for (const key of META_KEYS) {
-    const value = metaValue(doc, key);
-    if (!value) continue;
-    let text: string;
-    try {
-      text =
-        key === 'CreationDate' || key === 'ModDate'
-          ? value.decodeDate().toISOString()
-          : value.decodeText();
-    } catch {
-      try {
-        text = value.decodeText();
-      } catch {
-        text = value.asString();
-      }
-    }
-    if (text) result[key] = text;
-  }
-  return result;
-}
 
 /**
  * Builds the output PDF. Pages are copied object-for-object from the source
@@ -241,6 +227,41 @@ function contentStreams(doc: PDFDocument, pageIndex: number): Uint8Array[] {
   return streams.map((s) => (s instanceof PDFRawStream ? s.getContents() : new Uint8Array()));
 }
 
+/**
+ * Raw (still-encoded) bytes of every image a page can draw, keyed by its
+ * resource path (e.g. "X2" or "Fm1/Im0" inside a form). Copied pages keep
+ * their resource names, so source and output can be compared name by name.
+ */
+function pageImages(doc: PDFDocument, pageIndex: number): Map<string, Uint8Array> {
+  const out = new Map<string, Uint8Array>();
+  const walk = (resources: PDFDict | undefined, prefix: string, depth: number) => {
+    const xobjects = resources?.lookup(PDFName.of('XObject'));
+    if (!(xobjects instanceof PDFDict) || depth > 12) return;
+    for (const [name, ref] of xobjects.entries()) {
+      const xobj = doc.context.lookup(ref);
+      if (!(xobj instanceof PDFRawStream)) continue;
+      const key = prefix + name.decodeText();
+      const subtype = xobj.dict.get(PDFName.of('Subtype'))?.toString();
+      if (subtype === '/Image') out.set(key, xobj.getContents());
+      else if (subtype === '/Form') {
+        const res = xobj.dict.lookup(PDFName.of('Resources'));
+        walk(res instanceof PDFDict ? res : undefined, `${key}/`, depth + 1);
+      }
+    }
+  };
+  walk(doc.getPage(pageIndex).node.Resources(), '', 0);
+  return out;
+}
+
+function sameImages(a: Map<string, Uint8Array>, b: Map<string, Uint8Array>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [key, bytes] of a) {
+    const other = b.get(key);
+    if (!other || !sameBytes([bytes], [other])) return false;
+  }
+  return true;
+}
+
 function sameBytes(a: Uint8Array[], b: Uint8Array[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
@@ -270,8 +291,9 @@ export interface VerifyResult {
 
 /**
  * Re-opens the generated PDF and checks, page by page, that the raw content
- * streams are byte-identical to the source and that the extracted text
- * (characters and positions) and page size match exactly.
+ * streams and every image are byte-identical to the source (so image quality
+ * is untouched) and that the extracted text (characters and positions) and
+ * page size match exactly.
  */
 export async function verifyOutput(
   output: Uint8Array,
@@ -292,6 +314,10 @@ export async function verifyOutput(
 
         if (!sameBytes(contentStreams(src.lib, item.pageIndex), contentStreams(outLib, i))) {
           problems.push(`${label}: nội dung trang khác bản gốc.`);
+          continue;
+        }
+        if (!sameImages(pageImages(src.lib, item.pageIndex), pageImages(outLib, i))) {
+          problems.push(`${label}: hình ảnh khác bản gốc.`);
           continue;
         }
 

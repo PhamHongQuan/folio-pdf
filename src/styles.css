@@ -151,47 +151,73 @@ input {
   font-size: 15px;
 }
 
-.doc-name-field {
-  display: inline-grid;
-  min-width: 0;
-  max-width: min(420px, 50vw);
-}
-
-.doc-name-field::after,
-.doc-name-field input {
-  grid-area: 1 / 1;
+.doc-title {
   font-weight: 600;
-  padding: 5px 4px 5px 8px;
-  border: 1px solid transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(420px, 40vw);
 }
 
-.doc-name-field::after {
-  content: attr(data-value) ' ';
-  visibility: hidden;
-  white-space: pre;
+.doc-name .muted {
+  margin-left: 6px;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+/* Save-as dialog */
+.save-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 8px 0;
+}
+
+.save-form label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.save-field {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface-2);
   overflow: hidden;
 }
 
-.doc-name input {
-  width: 100%;
-  border: 1px solid transparent;
-  background: transparent;
-  border-radius: 6px;
-  padding: 5px 4px 5px 8px;
-  font-weight: 600;
-  min-width: 0;
-  max-width: 100%;
-  text-overflow: ellipsis;
-}
-
-.doc-name input:hover {
-  border-color: var(--border);
-}
-
-.doc-name input:focus {
-  outline: none;
+.save-field:focus-within {
   border-color: var(--primary);
-  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.save-field input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 12px;
+  border: none;
+  background: transparent;
+  font-size: 16px; /* 16px avoids iOS zoom-on-focus */
+  outline: none;
+}
+
+.save-ext {
+  padding: 0 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.save-hint {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.is-dialog .sheet {
+  width: min(440px, 100%);
 }
 
 .header-actions {
@@ -278,93 +304,6 @@ input {
 .icon-btn:hover:not(:disabled) {
   background: var(--surface-2);
   color: var(--text);
-}
-
-.split {
-  position: relative;
-  display: flex;
-}
-
-.split > .btn:first-child {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.split-toggle {
-  border-top-left-radius: 0 !important;
-  border-bottom-left-radius: 0 !important;
-  border-left: none !important;
-  padding: 0 8px !important;
-}
-
-.menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  width: 290px;
-  padding: 8px;
-  border-radius: var(--radius);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-lg);
-  z-index: 60;
-}
-
-.menu-title {
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  padding: 4px 8px 6px;
-}
-
-.option {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  padding: 8px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.option:hover {
-  background: var(--surface-2);
-}
-
-.option input {
-  margin-top: 3px;
-  accent-color: var(--primary);
-}
-
-.option small {
-  display: block;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-/* Larger touch targets inside the phone bottom sheet. */
-.is-sheet .option {
-  padding: 14px 8px;
-  font-size: 16px;
-  gap: 14px;
-}
-
-.is-sheet .option input {
-  width: 20px;
-  height: 20px;
-  margin-top: 1px;
-}
-
-.is-sheet .option small {
-  font-size: 13px;
-  margin-top: 2px;
-}
-
-.is-sheet .option + .option {
-  border-top: 1px solid var(--border);
-  border-radius: 0;
 }
 
 /* Landing ---------------------------------------------------------------- */
@@ -1263,11 +1202,7 @@ html.dragging body {
   .header-actions .verified {
     display: none;
   }
-  .header-actions > .btn.primary,
-  .header-actions > .split {
-    flex: 1;
-  }
-  .split > .btn:first-child {
+  .header-actions > .btn {
     flex: 1;
   }
   .workspace {

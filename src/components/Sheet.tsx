@@ -36,10 +36,26 @@ export function Sheet({ title, onClose, children, footer }: Props) {
     window.addEventListener('keydown', onKey, true);
     const { overflow } = document.body.style;
     document.body.style.overflow = 'hidden';
-    panelRef.current?.focus();
+    // Keep focus on an input the content focused itself (child effects run first).
+    if (!panelRef.current?.contains(document.activeElement)) panelRef.current?.focus();
     return () => {
       window.removeEventListener('keydown', onKey, true);
       document.body.style.overflow = overflow;
+    };
+  }, []);
+
+  // Phones: lift the sheet above the on-screen keyboard (iOS does not resize the layout viewport).
+  const [keyboard, setKeyboard] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => setKeyboard(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
     };
   }, []);
 
@@ -57,7 +73,11 @@ export function Sheet({ title, onClose, children, footer }: Props) {
   };
 
   return createPortal(
-    <div className={`sheet-backdrop ${mobile ? 'is-sheet' : 'is-dialog'}`} onClick={onClose}>
+    <div
+      className={`sheet-backdrop ${mobile ? 'is-sheet' : 'is-dialog'}`}
+      onClick={onClose}
+      style={mobile && keyboard ? { paddingBottom: keyboard } : undefined}
+    >
       <div
         ref={panelRef}
         className="sheet"
