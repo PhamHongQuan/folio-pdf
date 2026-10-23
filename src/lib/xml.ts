@@ -1,5 +1,5 @@
 import type { TextItem } from 'pdfjs-dist/types/src/display/api';
-import { getTextItems, normalizeRotation, primarySource, sha256Hex } from './pdf';
+import { getTextItems, META_KEYS, normalizeRotation, primarySource, readMetadata, sha256Hex } from './pdf';
 import type { PageItem, SourceDoc } from './types';
 
 // Characters that are not allowed in XML 1.0 are replaced with U+FFFD and flagged.
@@ -98,17 +98,12 @@ export async function buildXml(
   );
 
   out.push('  <Metadata>');
-  const meta: [string, string | undefined][] = [
-    ['Title', first.getTitle()],
-    ['Author', first.getAuthor()],
-    ['Subject', first.getSubject()],
-    ['Keywords', first.getKeywords()],
-    ['Creator', first.getCreator()],
-    ['Producer', first.getProducer()],
-    ['CreationDate', first.getCreationDate()?.toISOString()],
-    ['ModificationDate', first.getModificationDate()?.toISOString()],
-  ];
-  for (const [tag, value] of meta) if (value) out.push(`    <${tag}>${esc(value)}</${tag}>`);
+  const meta = readMetadata(first);
+  for (const key of META_KEYS) {
+    const value = meta[key];
+    const tag = key === 'ModDate' ? 'ModificationDate' : key;
+    if (value) out.push(`    <${tag}>${esc(value)}</${tag}>`);
+  }
   out.push('  </Metadata>');
 
   out.push('  <Sources>');

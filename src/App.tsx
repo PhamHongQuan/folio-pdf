@@ -201,6 +201,7 @@ export default function App() {
           loaded.push(await loadSource(file, id, index + 1));
           index++;
         } catch (err) {
+          if (!(err instanceof PdfLoadError)) console.error('PDF load failed', err);
           toast('error', err instanceof PdfLoadError ? err.message : `Lỗi khi đọc "${file.name}".`);
         }
       }
@@ -365,7 +366,8 @@ export default function App() {
       downloadFile(bytes, `${safeFileName(outputName)}.pdf`, 'application/pdf');
       toast('success', `Đã tải PDF · ${pages.length} trang · ${formatBytes(bytes.length)}`);
     } catch (err) {
-      toast('error', `Không xuất được PDF: ${err instanceof Error ? err.message : String(err)}`);
+      console.error('PDF export failed', err);
+      toast('error', 'Không xuất được PDF. Vui lòng thử lại hoặc kiểm tra file gốc.');
     } finally {
       setBusy(null);
     }
@@ -381,7 +383,8 @@ export default function App() {
       downloadFile(xml, `${safeFileName(outputName)}.xml`, 'application/xml;charset=utf-8');
       toast('success', `Đã tải XML · ${pages.length} trang`);
     } catch (err) {
-      toast('error', `Không xuất được XML: ${err instanceof Error ? err.message : String(err)}`);
+      console.error('XML export failed', err);
+      toast('error', 'Không xuất được XML. Vui lòng thử lại hoặc kiểm tra file gốc.');
     } finally {
       setBusy(null);
     }

@@ -1,8 +1,12 @@
 import {
   degrees,
   PDFArray,
+  PDFDict,
   PDFDocument,
+  PDFHexString,
+  PDFName,
   PDFRawStream,
+  PDFString,
   type PDFPage,
 } from 'pdf-lib';
 import {
@@ -117,6 +121,73 @@ export function primarySource(pages: PageItem[], sources: Map<string, SourceDoc>
   return [...sources.values()].filter((s) => used.has(s.id)).sort((a, b) => a.index - b.index)[0];
 }
 
+// ---------------------------------------------------------------------------
+// Document metadata (/Info dictionary)
+// ---------------------------------------------------------------------------
+
+export const META_KEYS = [
+  'Title',
+  'Author',
+  'Subject',
+  'Keywords',
+  'Creator',
+  'Producer',
+  'CreationDate',
+  'ModDate',
+] as const;
+export type MetaKey = (typeof META_KEYS)[number];
+
+function infoDict(doc: PDFDocument): PDFDict | undefined {
+  const ref = doc.context.trailerInfo.Info;
+  const dict = ref ? doc.context.lookup(ref) : undefined;
+  return dict instanceof PDFDict ? dict : undefined;
+}
+
+function metaValue(doc: PDFDocument, key: MetaKey): PDFString | PDFHexString | undefined {
+  const raw = infoDict(doc)?.get(PDFName.of(key));
+  const value = raw ? doc.context.lookup(raw) : undefined;
+  return value instanceof PDFString || value instanceof PDFHexString ? value : undefined;
+}
+
+/**
+ * Copies the metadata strings verbatim (no decode/re-encode), so unusual or
+ * malformed values — e.g. an empty CreationDate — are preserved and never
+ * break the export. ModDate is left as set on the output (now).
+ */
+function copyMetadata(from: PDFDocument, to: PDFDocument): void {
+  const target = infoDict(to);
+  if (!target) return;
+  for (const key of META_KEYS) {
+    if (key === 'ModDate') continue;
+    const value = metaValue(from, key);
+    if (value) target.set(PDFName.of(key), value.clone());
+  }
+}
+
+/** Human-readable metadata for display/XML; dates as ISO when valid, otherwise the raw text. */
+export function readMetadata(doc: PDFDocument): Partial<Record<MetaKey, string>> {
+  const result: Partial<Record<MetaKey, string>> = {};
+  for (const key of META_KEYS) {
+    const value = metaValue(doc, key);
+    if (!value) continue;
+    let text: string;
+    try {
+      text =
+        key === 'CreationDate' || key === 'ModDate'
+          ? value.decodeDate().toISOString()
+          : value.decodeText();
+    } catch {
+      try {
+        text = value.decodeText();
+      } catch {
+        text = value.asString();
+      }
+    }
+    if (text) result[key] = text;
+  }
+  return result;
+}
+
 /**
  * Builds the output PDF. Pages are copied object-for-object from the source
  * files (content streams, fonts, images, annotations are not re-encoded or
@@ -129,22 +200,8 @@ export async function buildPdf(
   if (pages.length === 0) throw new Error('Không còn trang nào để xuất.');
 
   const out = await PDFDocument.create({ updateMetadata: false });
-  const first = primarySource(pages, sources).lib;
-  const title = first.getTitle();
-  const author = first.getAuthor();
-  const subject = first.getSubject();
-  const keywords = first.getKeywords();
-  const creator = first.getCreator();
-  const producer = first.getProducer();
-  const created = first.getCreationDate();
-  if (title) out.setTitle(title);
-  if (author) out.setAuthor(author);
-  if (subject) out.setSubject(subject);
-  if (keywords) out.setKeywords([keywords]);
-  if (creator) out.setCreator(creator);
-  if (producer) out.setProducer(producer);
-  if (created) out.setCreationDate(created);
   out.setModificationDate(new Date());
+  copyMetadata(primarySource(pages, sources).lib, out);
 
   // Copy all pages of a source in one call so shared resources (fonts, images) are not duplicated.
   const wanted = new Map<string, number[]>();
