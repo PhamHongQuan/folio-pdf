@@ -319,7 +319,7 @@ input {
   padding: 4px 8px 6px;
 }
 
-.menu label {
+.option {
   display: flex;
   gap: 10px;
   align-items: flex-start;
@@ -329,19 +329,42 @@ input {
   font-size: 14px;
 }
 
-.menu label:hover {
+.option:hover {
   background: var(--surface-2);
 }
 
-.menu input {
+.option input {
   margin-top: 3px;
   accent-color: var(--primary);
 }
 
-.menu small {
+.option small {
   display: block;
   font-size: 12px;
   color: var(--muted);
+}
+
+/* Larger touch targets inside the phone bottom sheet. */
+.is-sheet .option {
+  padding: 14px 8px;
+  font-size: 16px;
+  gap: 14px;
+}
+
+.is-sheet .option input {
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+}
+
+.is-sheet .option small {
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.is-sheet .option + .option {
+  border-top: 1px solid var(--border);
+  border-radius: 0;
 }
 
 /* Landing ---------------------------------------------------------------- */
@@ -542,6 +565,10 @@ input {
   color: var(--muted);
 }
 
+.hint-touch {
+  display: none;
+}
+
 .hint .sep {
   opacity: 0.5;
 }
@@ -582,6 +609,8 @@ input {
   cursor: grab;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   outline: none;
 }
@@ -693,10 +722,28 @@ input {
   color: var(--ink-text);
 }
 
-.card-tools {
+.card-bar {
   position: absolute;
   top: 8px;
   right: 8px;
+  display: flex;
+  align-items: center;
+}
+
+/* Drag handle: touch screens only (see the hover: none block). */
+.drag-grip {
+  display: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--surface-2);
+  touch-action: none;
+  cursor: grab;
+}
+
+.card-tools {
   display: flex;
   gap: 2px;
   padding: 3px;
@@ -803,26 +850,48 @@ input {
   box-shadow: var(--shadow);
 }
 
-/* Touch screens have no hover: show page tools as a row under the page instead of over it. */
+/* Touch screens have no hover: show a drag handle and the page tools as a row under the page. */
 @media (hover: none) {
   .card-frame {
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
   }
   .card-check {
     opacity: 1;
   }
-  .card-tools {
+  .card-bar {
     position: static;
+    width: 100%;
+    justify-content: space-between;
+  }
+  .drag-grip {
+    display: grid;
+  }
+  .card-tools {
     opacity: 1;
     transform: none;
     box-shadow: none;
     background: transparent;
     padding: 0;
-    width: 100%;
-    justify-content: space-around;
   }
+  .card-tools button {
+    width: 34px;
+    height: 34px;
+  }
+  .hint-mouse {
+    display: none;
+  }
+  .hint-touch {
+    display: flex;
+  }
+}
+
+/* While dragging on touch screens: no page scroll / pull-to-refresh / bounce. */
+html.dragging,
+html.dragging body {
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 /* Selection bar ---------------------------------------------------------- */
@@ -878,9 +947,139 @@ input {
   color: #b91c1c;
 }
 
+/* Desktop: one inline row — count, actions, then the close button. */
+.selection-head,
+.selection-actions {
+  display: contents;
+}
+
 .selection-bar .close {
+  order: 99;
   padding: 0 9px;
   margin-left: 4px;
+}
+
+.close-label {
+  display: none;
+}
+
+/* Bottom sheet (phones) / dialog (desktop) ------------------------------- */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  background: rgba(10, 12, 16, 0.5);
+  animation: fade 0.18s ease-out;
+}
+
+.sheet-backdrop.is-sheet {
+  align-items: flex-end;
+}
+
+.sheet-backdrop.is-dialog {
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.sheet {
+  width: 100%;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--text);
+  outline: none;
+  box-shadow: var(--shadow-lg);
+  transition: transform 0.2s ease;
+}
+
+.is-sheet .sheet {
+  border-radius: 20px 20px 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: sheet-up 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.is-dialog .sheet {
+  max-width: 420px;
+  border-radius: 16px;
+  animation: pop 0.16s ease-out;
+}
+
+.sheet-head {
+  padding: 8px 8px 0 20px;
+  touch-action: none;
+}
+
+.sheet-grabber {
+  display: block;
+  width: 40px;
+  height: 5px;
+  margin: 2px auto 6px;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+
+.sheet-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 17px;
+}
+
+.sheet-body {
+  padding: 4px 12px 8px;
+  overflow-y: auto;
+}
+
+.sheet-text {
+  margin: 4px 8px 8px;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.sheet-footer {
+  display: flex;
+  gap: 10px;
+  padding: 8px 20px 16px;
+}
+
+.btn.block {
+  flex: 1;
+  height: 46px;
+  font-size: 15px;
+}
+
+.is-dialog .btn.block {
+  height: 40px;
+  font-size: 14px;
+}
+
+.btn.danger-solid {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn.danger-solid:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 85%, #000);
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
 }
 
 /* Modal ------------------------------------------------------------------ */
@@ -1077,9 +1276,6 @@ input {
   .btn.ghost .label-optional {
     display: none;
   }
-  .hint {
-    display: none;
-  }
   .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px 12px;
@@ -1090,13 +1286,74 @@ input {
   .landing {
     padding-top: 40px;
   }
+  .workspace {
+    padding-bottom: 180px;
+  }
+
+  /* Selection bar becomes a docked bottom sheet. */
   .selection-bar {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    transform: none;
+    max-width: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 8px 12px calc(10px + env(safe-area-inset-bottom));
+    border-radius: 18px 18px 0 0;
+    background: var(--surface);
+    color: var(--text);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.14);
+    animation: sheet-up 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .selection-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 0 2px 4px;
+  }
+  .selection-bar .close {
+    order: 0;
+    margin: 0;
+    color: var(--primary);
+    font-weight: 600;
+  }
+  .selection-bar .close svg {
+    display: none;
+  }
+  .close-label {
+    display: inline;
+  }
+  .selection-actions {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+  }
+  .selection-actions button {
+    flex-direction: column;
+    justify-content: center;
+    gap: 4px;
+    height: 60px;
+    padding: 0 4px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--surface-2);
+    border-radius: 12px;
+  }
+  .selection-bar button:hover {
+    background: var(--surface-2);
+  }
+  .selection-bar button.danger,
+  [data-theme='dark'] .selection-bar button.danger {
+    color: var(--danger);
+    background: var(--danger-soft);
+  }
+  .toasts {
+    top: 12px;
     left: 16px;
     right: 16px;
-    transform: none;
-    bottom: 16px;
-  }
-  .selection-bar button {
-    padding: 0 9px;
+    max-width: none;
   }
 }

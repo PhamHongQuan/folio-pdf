@@ -4,8 +4,7 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
-  TouchSensor,
+  MouseSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -20,10 +19,13 @@ import {
 import { Icon } from './components/Icon';
 import { PageCard, PageThumb, sourceColor } from './components/PageCard';
 import { PreviewModal } from './components/PreviewModal';
+import { Sheet } from './components/Sheet';
 import { downloadFile, formatBytes, safeFileName } from './lib/download';
 import { buildPdf, loadSource, normalizeRotation, PdfLoadError, verifyOutput, type VerifyResult } from './lib/pdf';
 import type { PageItem, SourceDoc } from './lib/types';
+import { lockTouchScroll, SmartTouchSensor, type SmartTouchOptions } from './lib/sensors';
 import { useTheme } from './lib/theme';
+import { MOBILE_QUERY, useMediaQuery } from './lib/useMediaQuery';
 import { buildXml } from './lib/xml';
 
 // ---------------------------------------------------------------------------
@@ -125,6 +127,8 @@ export default function App() {
   const [embedPdf, setEmbedPdf] = useState(true);
   const [includeItems, setIncludeItems] = useState(false);
   const [xmlMenu, setXmlMenu] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const isMobile = useMediaQuery(MOBILE_QUERY);
   const [dragOver, setDragOver] = useState(false);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -218,8 +222,8 @@ export default function App() {
     [sources.length, pages, outputName, commit, toast],
   );
 
-  const resetAll = useCallback(() => {
-    if (!window.confirm('Đóng tài liệu hiện tại? Các thay đổi chưa tải xuống sẽ mất.')) return;
+  const closeDocument = useCallback(() => {
+    setConfirmClose(false);
     sources.forEach((s) => void s.view.destroy());
     setSources([]);
     dispatch({ type: 'clear' });
@@ -305,19 +309,38 @@ export default function App() {
   // -------------------------------------------------------------------------
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
+    // Mouse: drag after a small movement. Touch: the ⠿ handle drags at once, anywhere else
+    // needs a long-press, so ordinary swipes keep scrolling the page.
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(SmartTouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 6 },
+      handleConstraint: { distance: 4 },
+    } as SmartTouchOptions),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
+  const unlockScroll = useRef<(() => void) | null>(null);
+  const endDrag = useCallback(() => {
+    setActiveKey(null);
+    lastDragEnd.current = Date.now();
+    unlockScroll.current?.();
+    unlockScroll.current = null;
+  }, []);
+  useEffect(() => () => unlockScroll.current?.(), []);
+
   const dragGroup = activeKey && selected.has(activeKey) && selected.size > 1 ? selected : null;
 
-  const onDragStart = useCallback(({ active }: DragStartEvent) => setActiveKey(String(active.id)), []);
+  const onDragStart = useCallback(({ active, activatorEvent }: DragStartEvent) => {
+    setActiveKey(String(active.id));
+    if (typeof TouchEvent !== 'undefined' && activatorEvent instanceof TouchEvent) {
+      unlockScroll.current = lockTouchScroll();
+      navigator.vibrate?.(15);
+    }
+  }, []);
 
   const onDragEnd = useCallback(
     ({ active, over }: DragEndEvent) => {
-      setActiveKey(null);
-      lastDragEnd.current = Date.now();
+      endDrag();
       if (!over || active.id === over.id) return;
       const from = pages.findIndex((p) => p.key === active.id);
       const to = pages.findIndex((p) => p.key === over.id);
@@ -397,7 +420,9 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (preview !== null || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      if (preview !== null || xmlMenu || confirmClose || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) {
+        return;
+      }
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
       if (mod && key === 'z' && !e.shiftKey) {
@@ -414,21 +439,45 @@ export default function App() {
         deleteKeys(selected);
       } else if (e.key === 'Escape') {
         setSelected(new Set());
-        setXmlMenu(false);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [preview, pages, selected, deleteKeys, undo, redo]);
+  }, [preview, xmlMenu, confirmClose, pages, selected, deleteKeys, undo, redo]);
 
+  // Desktop dropdown: close on outside click / Esc (the mobile bottom sheet handles its own).
   useEffect(() => {
-    if (!xmlMenu) return;
+    if (!xmlMenu || isMobile) return;
     const close = (e: PointerEvent) => {
       if (!(e.target as HTMLElement).closest('.split')) setXmlMenu(false);
     };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setXmlMenu(false);
     window.addEventListener('pointerdown', close);
-    return () => window.removeEventListener('pointerdown', close);
-  }, [xmlMenu]);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointerdown', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [xmlMenu, isMobile]);
+
+  const xmlOptions = (
+    <div className="option-list">
+      <label className="option">
+        <input type="checkbox" checked={embedPdf} onChange={(e) => setEmbedPdf(e.target.checked)} />
+        <span>
+          Nhúng bản PDF đầy đủ
+          <small>Giữ nguyên tài liệu trong XML (base64)</small>
+        </span>
+      </label>
+      <label className="option">
+        <input type="checkbox" checked={includeItems} onChange={(e) => setIncludeItems(e.target.checked)} />
+        <span>
+          Kèm tọa độ từng cụm chữ
+          <small>Dành cho phần mềm cần vị trí chính xác</small>
+        </span>
+      </label>
+    </div>
+  );
 
   // -------------------------------------------------------------------------
   // Render
@@ -507,27 +556,10 @@ export default function App() {
                 >
                   <Icon name="chevronDown" size={16} />
                 </button>
-                {xmlMenu && (
-                  <div className="menu" role="menu">
+                {xmlMenu && !isMobile && (
+                  <div className="menu">
                     <div className="menu-title">Tùy chọn XML</div>
-                    <label>
-                      <input type="checkbox" checked={embedPdf} onChange={(e) => setEmbedPdf(e.target.checked)} />
-                      <span>
-                        Nhúng bản PDF đầy đủ
-                        <small>Giữ nguyên tài liệu trong XML (base64)</small>
-                      </span>
-                    </label>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={includeItems}
-                        onChange={(e) => setIncludeItems(e.target.checked)}
-                      />
-                      <span>
-                        Kèm tọa độ từng cụm chữ
-                        <small>Dành cho phần mềm cần vị trí chính xác</small>
-                      </span>
-                    </label>
+                    {xmlOptions}
                   </div>
                 )}
               </div>
@@ -617,7 +649,7 @@ export default function App() {
                 {pages.length} trang
                 {deletedCount > 0 && <span className="muted"> · đã xóa {deletedCount}</span>}
               </span>
-              <button className="btn ghost" onClick={resetAll} title="Đóng tài liệu">
+              <button className="btn ghost" onClick={() => setConfirmClose(true)} title="Đóng tài liệu">
                 <Icon name="close" size={16} /> <span className="label-optional">Đóng</span>
               </button>
             </div>
@@ -647,11 +679,12 @@ export default function App() {
             </div>
           )}
 
-          <p className="hint">
+          <p className="hint hint-mouse">
             <Icon name="move" size={14} /> Kéo thả trang để đổi vị trí
             <span className="sep">·</span> Bấm để chọn, Shift để chọn nhiều
             <span className="sep">·</span> Nhấp đúp để xem lớn
           </p>
+          <p className="hint hint-touch">Giữ ⠿ hoặc nhấn giữ trang để kéo đổi vị trí · Chạm để chọn</p>
 
           {verify && !verify.ok && (
             <section className="alert" role="alert">
@@ -672,7 +705,7 @@ export default function App() {
             collisionDetection={closestCenter}
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
-            onDragCancel={() => setActiveKey(null)}
+            onDragCancel={endDrag}
           >
             <SortableContext items={pages.map((p) => p.key)} strategy={rectSortingStrategy}>
               <ul className="grid">
@@ -713,23 +746,64 @@ export default function App() {
 
       {selected.size > 0 && (
         <div className="selection-bar" role="toolbar" aria-label="Thao tác với trang đã chọn">
-          <span className="selection-count">{selected.size} trang đã chọn</span>
-          <button onClick={() => rotateKeys(selected, 90)}>
-            <Icon name="rotateRight" size={16} /> Xoay
-          </button>
-          <button onClick={() => moveSelectedTo(0)}>
-            <Icon name="toTop" size={16} /> Lên đầu
-          </button>
-          <button onClick={() => moveSelectedTo(Infinity)}>
-            <Icon name="toBottom" size={16} /> Xuống cuối
-          </button>
-          <button className="danger" onClick={() => deleteKeys(selected)}>
-            <Icon name="trash" size={16} /> Xóa
-          </button>
-          <button className="close" onClick={() => setSelected(new Set())} aria-label="Bỏ chọn" title="Bỏ chọn (Esc)">
-            <Icon name="close" size={16} />
-          </button>
+          <div className="selection-head">
+            <span className="selection-count">{selected.size} trang đã chọn</span>
+            <button className="close" onClick={() => setSelected(new Set())} aria-label="Bỏ chọn" title="Bỏ chọn (Esc)">
+              <Icon name="close" size={16} />
+              <span className="close-label">Bỏ chọn</span>
+            </button>
+          </div>
+          <div className="selection-actions">
+            <button onClick={() => rotateKeys(selected, 90)}>
+              <Icon name="rotateRight" size={18} /> <span>Xoay</span>
+            </button>
+            <button onClick={() => moveSelectedTo(0)}>
+              <Icon name="toTop" size={18} /> <span>Lên đầu</span>
+            </button>
+            <button onClick={() => moveSelectedTo(Infinity)}>
+              <Icon name="toBottom" size={18} /> <span>Xuống cuối</span>
+            </button>
+            <button className="danger" onClick={() => deleteKeys(selected)}>
+              <Icon name="trash" size={18} /> <span>Xóa</span>
+            </button>
+          </div>
         </div>
+      )}
+
+      {xmlMenu && isMobile && (
+        <Sheet
+          title="Tùy chọn XML"
+          onClose={() => setXmlMenu(false)}
+          footer={
+            <button className="btn primary block" onClick={exportXml} disabled={!!busy}>
+              {busy === 'xml' ? <span className="spinner" /> : <Icon name="download" size={16} />}
+              Tải XML
+            </button>
+          }
+        >
+          {xmlOptions}
+        </Sheet>
+      )}
+
+      {confirmClose && (
+        <Sheet
+          title="Đóng tài liệu?"
+          onClose={() => setConfirmClose(false)}
+          footer={
+            <>
+              <button className="btn block" onClick={() => setConfirmClose(false)}>
+                Hủy
+              </button>
+              <button className="btn danger-solid block" onClick={closeDocument}>
+                Đóng tài liệu
+              </button>
+            </>
+          }
+        >
+          <p className="sheet-text">
+            Các thay đổi chưa tải xuống sẽ bị mất. File gốc trên máy của bạn không bị ảnh hưởng.
+          </p>
+        </Sheet>
       )}
 
       {preview !== null && pages[preview] && (

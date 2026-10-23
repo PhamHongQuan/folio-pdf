@@ -1,4 +1,4 @@
-import type { MouseEvent, PointerEvent } from 'react';
+import type { SyntheticEvent } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { PageItem, SourceDoc } from '../lib/types';
@@ -16,7 +16,7 @@ interface ThumbProps {
   source: SourceDoc;
 }
 
-/** The page image with its file colour marker; shared by the grid card and the drag preview. */
+/** The page image; shared by the grid card and the drag preview. */
 export function PageThumb({ item, source }: ThumbProps) {
   return (
     <div className="thumb">
@@ -46,7 +46,17 @@ interface Props {
   onPreview: (key: string) => void;
 }
 
-const stop = (e: PointerEvent | MouseEvent) => e.stopPropagation();
+const stop = (e: SyntheticEvent) => e.stopPropagation();
+
+/** Keeps presses on the action buttons from starting a drag (mouse, touch or keyboard). */
+const noDrag = {
+  onPointerDown: stop,
+  onMouseDown: stop,
+  onTouchStart: stop,
+  onKeyDown: stop,
+  onClick: stop,
+  onDoubleClick: stop,
+};
 
 export function PageCard({
   item,
@@ -78,6 +88,8 @@ export function PageCard({
       aria-label={`Trang ${position}${selected ? ', đã chọn' : ''}`}
       onClick={(e) => onSelect(item.key, e.shiftKey)}
       onDoubleClick={() => onPreview(item.key)}
+      // Long-press is used for dragging on touch screens; suppress the browser's image menu.
+      onContextMenu={(e) => e.preventDefault()}
     >
       <div className="card-frame">
         <PageThumb item={item} source={source} />
@@ -88,16 +100,22 @@ export function PageCard({
 
         {item.rotation !== 0 && <span className="card-badge">{item.rotation}°</span>}
 
-        <div className="card-tools" onPointerDown={stop} onClick={stop} onDoubleClick={stop}>
-          <button onClick={() => onPreview(item.key)} title="Xem lớn" aria-label="Xem lớn">
-            <Icon name="zoom" size={16} />
-          </button>
-          <button onClick={() => onRotate(item.key)} title="Xoay 90°" aria-label="Xoay 90°">
-            <Icon name="rotateRight" size={16} />
-          </button>
-          <button className="danger" onClick={() => onDelete(item.key)} title="Xóa trang" aria-label="Xóa trang">
-            <Icon name="trash" size={16} />
-          </button>
+        <div className="card-bar">
+          {/* Touch screens: dragging from this handle starts immediately (see SmartTouchSensor). */}
+          <span className="drag-grip" data-drag-handle aria-hidden="true">
+            <Icon name="grip" size={18} />
+          </span>
+          <div className="card-tools" {...noDrag}>
+            <button onClick={() => onPreview(item.key)} title="Xem lớn" aria-label="Xem lớn">
+              <Icon name="zoom" size={16} />
+            </button>
+            <button onClick={() => onRotate(item.key)} title="Xoay 90°" aria-label="Xoay 90°">
+              <Icon name="rotateRight" size={16} />
+            </button>
+            <button className="danger" onClick={() => onDelete(item.key)} title="Xóa trang" aria-label="Xóa trang">
+              <Icon name="trash" size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
