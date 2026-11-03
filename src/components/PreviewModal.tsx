@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { PageItem, SourceDoc } from '../lib/types';
+import { useBackHandler } from '../lib/useBackHandler';
 import { Icon } from './Icon';
 import { PageCanvas } from './PageCanvas';
 
@@ -25,6 +26,7 @@ export function PreviewModal({ pages, index, sources, onNavigate, onClose }: Pro
   const item = pages[index];
   const source = sources.get(item.docId)!;
   const { w, h } = useViewport();
+  useBackHandler(true, onClose);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

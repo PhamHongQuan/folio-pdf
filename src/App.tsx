@@ -26,6 +26,7 @@ import { buildPdf, loadSource, normalizeRotation, PdfLoadError, verifyOutput, ty
 import type { PageItem, SourceDoc } from './lib/types';
 import { lockTouchScroll, SmartTouchSensor, type SmartTouchOptions } from './lib/sensors';
 import { useTheme } from './lib/theme';
+import { useBackHandler } from './lib/useBackHandler';
 import { buildAps } from './lib/aps';
 
 // ---------------------------------------------------------------------------
@@ -451,11 +452,30 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [preview, confirmClose, saveAs, pages, selected, deleteKeys, undo, redo]);
 
+  const hasDocs = sources.length > 0;
+
+  // Back button on the main screen: drop the selection first, then ask before
+  // closing instead of leaving the page (overlays register their own handlers on top).
+  useBackHandler(hasDocs, () => {
+    if (selected.size) setSelected(new Set());
+    else setConfirmClose(true);
+  });
+
+  // Reload / closing the tab (desktop, Android) — iOS ignores this, the back guard covers it there.
+  useEffect(() => {
+    if (!hasDocs) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [hasDocs]);
+
   // -------------------------------------------------------------------------
   // Render
   // -------------------------------------------------------------------------
 
-  const hasDocs = sources.length > 0;
   const multiFile = sources.length > 1;
   const deletedCount = totalOriginalPages - pages.length;
   const attachments = sources.flatMap((s) => s.attachments.map((a) => ({ ...a, source: s })));

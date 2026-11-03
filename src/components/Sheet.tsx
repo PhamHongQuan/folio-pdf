@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type TouchEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { useBackHandler } from '../lib/useBackHandler';
 import { MOBILE_QUERY, useMediaQuery } from '../lib/useMediaQuery';
 import { Icon } from './Icon';
 
@@ -25,6 +26,7 @@ export function Sheet({ title, onClose, children, footer }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  useBackHandler(true, onClose);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
