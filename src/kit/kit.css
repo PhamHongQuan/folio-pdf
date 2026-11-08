@@ -1,0 +1,374 @@
+/*
+ * Stylesheet for the new UI (@nphuonha/ui-kit). Loaded only while that UI is
+ * on (see useStylesheet), so its Tailwind preflight and tokens never reach the
+ * classic UI.
+ */
+@import "@nphuonha/ui-kit/styles.css";
+
+/* Accent: Folio's teal instead of the kit's default indigo (documented --primary* tokens).
+ * Hand-picked rather than generateAccentVars(), which lightens #0f766e to a cyan
+ * that is too pale for text on white. */
+:root[data-ui="kit"] {
+  --primary: #0f766e;
+  --primary-foreground: #ffffff;
+  --primary-hover: #115e59;
+  --primary-active: #134e4a;
+  --primary-soft: #e3f4f1;
+  --primary-soft-foreground: #115e59;
+  --ring: #0f766e;
+}
+
+:root[data-ui="kit"].dark {
+  --primary: #2dd4bf;
+  --primary-foreground: #042f2e;
+  --primary-hover: #5eead4;
+  --primary-active: #14b8a6;
+  --primary-soft: #11302c;
+  --primary-soft-foreground: #99f6e4;
+  --ring: #2dd4bf;
+}
+
+/* The page grid / cards / canvas markup is shared with the classic UI
+ * (components/PageGrid, PageCard, PageCanvas); here it gets the kit look,
+ * built from the kit's tokens. */
+
+[data-ui="kit"] .page-canvas,
+[data-ui="kit"] .page-canvas-host {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+}
+
+[data-ui="kit"] .page-canvas-host canvas {
+  display: block;
+  max-width: 100%;
+  height: auto !important;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.06), 0 1px 3px rgb(0 0 0 / 0.08);
+}
+
+[data-ui="kit"] .page-canvas-status {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+
+[data-ui="kit"] .page-canvas-status.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--muted-foreground);
+  border-right-color: transparent;
+  border-radius: 50%;
+  opacity: 0.5;
+  animation: kit-spin 0.7s linear infinite;
+}
+
+[data-ui="kit"] .page-canvas-status.error {
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  color: var(--destructive);
+}
+
+@keyframes kit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Page grid ---------------------------------------------------------------- */
+
+.kit-grid .grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 184px);
+  justify-content: start;
+  gap: 24px 20px;
+}
+
+.kit-grid .card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  outline: none;
+}
+
+.kit-grid .card-frame {
+  position: relative;
+  width: 100%;
+  padding: 12px;
+  border-radius: 18px;
+  background-color: var(--card);
+  background-image: linear-gradient(to bottom, var(--light-sheen-soft) 0%, transparent 40%);
+  box-shadow: inset 0 1px 0 0 var(--light-top), var(--shadow-soft);
+  display: flex;
+  justify-content: center;
+  transition:
+    box-shadow 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.kit-grid .card:hover .card-frame {
+  box-shadow: inset 0 1px 0 0 var(--light-top), var(--shadow-raised);
+  transform: translateY(-1px);
+}
+
+.kit-grid .card:focus-visible .card-frame {
+  box-shadow: 0 0 0 2px var(--ring), var(--shadow-soft);
+}
+
+.kit-grid .card.selected .card-frame {
+  background-color: var(--primary-soft);
+  box-shadow: 0 0 0 2px var(--primary), var(--shadow-soft);
+}
+
+.kit-grid .card.placeholder .card-frame {
+  opacity: 0.4;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 2px var(--surface-hover);
+  transform: none;
+}
+
+.kit-grid .thumb {
+  display: flex;
+  justify-content: center;
+}
+
+.kit-grid .card-check {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
+  background: var(--card);
+  box-shadow: inset 0 0 0 2px var(--surface-hover), var(--shadow-soft);
+  color: transparent;
+  opacity: 0;
+  transition: opacity 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.kit-grid .card:hover .card-check {
+  opacity: 1;
+}
+
+.kit-grid .card.selected .card-check {
+  opacity: 1;
+  background: var(--primary);
+  box-shadow: none;
+  color: var(--primary-foreground);
+}
+
+.kit-grid .card-badge {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.kit-grid .card-bar {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+}
+
+/* Drag handle: touch screens only (see the hover: none block). */
+.kit-grid .drag-grip {
+  display: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  color: var(--muted-foreground);
+  background: var(--surface);
+  touch-action: none;
+  cursor: grab;
+}
+
+.kit-grid .card-tools {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9999px;
+  background: var(--popover);
+  box-shadow: inset 0 1px 0 0 var(--light-top), var(--shadow-raised);
+  opacity: 0;
+  transform: translateY(-2px);
+  transition:
+    opacity 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  cursor: default;
+}
+
+.kit-grid .card:hover .card-tools,
+.kit-grid .card:focus-visible .card-tools,
+.kit-grid .card-tools:focus-within {
+  opacity: 1;
+  transform: none;
+}
+
+.kit-grid .card-tools button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: background-color 160ms, color 160ms;
+}
+
+.kit-grid .card-tools button:hover {
+  background: var(--surface);
+  color: var(--foreground);
+}
+
+.kit-grid .card-tools button.danger:hover {
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+}
+
+.kit-grid .card-label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.kit-grid .card-label .dot {
+  align-self: center;
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+}
+
+.kit-grid .card-number {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.kit-grid .card-origin {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.kit-grid .add-tile button {
+  width: 100%;
+  min-height: 228px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 2px var(--surface-hover);
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 160ms, color 160ms, box-shadow 160ms;
+}
+
+.kit-grid .add-tile button:hover:not(:disabled) {
+  background: var(--primary-soft);
+  color: var(--primary-soft-foreground);
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+
+.kit-grid .add-tile button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.kit-grid .drag-preview {
+  position: relative;
+  padding: 12px;
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--shadow-overlay);
+  transform: rotate(2deg) scale(1.03);
+  cursor: grabbing;
+}
+
+.kit-grid .drag-count {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  box-shadow: var(--shadow-raised);
+}
+
+/* Touch screens have no hover: show a drag handle and the page tools as a row under the page. */
+@media (hover: none) {
+  .kit-grid .card-frame {
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .kit-grid .card-check {
+    opacity: 1;
+  }
+  .kit-grid .card-bar {
+    position: static;
+    width: 100%;
+    justify-content: space-between;
+  }
+  .kit-grid .drag-grip {
+    display: grid;
+  }
+  .kit-grid .card-tools {
+    opacity: 1;
+    transform: none;
+    box-shadow: none;
+    background: transparent;
+    padding: 0;
+  }
+  .kit-grid .card-tools button {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+@media (max-width: 760px) {
+  .kit-grid .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 12px;
+  }
+}
+
+/* While dragging on touch screens: no page scroll / pull-to-refresh / bounce. */
+html.dragging,
+html.dragging body {
+  overscroll-behavior: none;
+  touch-action: none;
+}

@@ -13,6 +13,35 @@ interface Props {
   lazy?: boolean;
 }
 
+/**
+ * Thumbnails already drawn, per document. Switching UI remounts every card;
+ * copying from here is far cheaper than another pdf.js render. Entries go
+ * away with the document (WeakMap) and each document keeps a bounded number.
+ */
+const thumbCache = new WeakMap<PDFDocumentProxy, Map<string, HTMLCanvasElement>>();
+const THUMBS_PER_DOC = 150;
+
+function cachedThumb(doc: PDFDocumentProxy, key: string): HTMLCanvasElement | null {
+  const src = thumbCache.get(doc)?.get(key);
+  if (!src) return null;
+  // A copy, since the same page can be on screen twice (card + drag preview).
+  const copy = document.createElement('canvas');
+  copy.width = src.width;
+  copy.height = src.height;
+  copy.style.width = src.style.width;
+  copy.style.height = src.style.height;
+  copy.getContext('2d')?.drawImage(src, 0, 0);
+  return copy;
+}
+
+function storeThumb(doc: PDFDocumentProxy, key: string, canvas: HTMLCanvasElement) {
+  let map = thumbCache.get(doc);
+  if (!map) thumbCache.set(doc, (map = new Map()));
+  map.delete(key);
+  map.set(key, canvas);
+  if (map.size > THUMBS_PER_DOC) map.delete(map.keys().next().value!);
+}
+
 /** Renders a PDF page to a canvas (display only — never touches the PDF data). */
 export function PageCanvas({ doc, pageIndex, rotation, maxWidth, maxHeight, lazy = false }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -38,6 +67,16 @@ export function PageCanvas({ doc, pageIndex, rotation, maxWidth, maxHeight, lazy
     if (!visible) return;
     let cancelled = false;
     let task: RenderTask | null = null;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const cacheKey = `${pageIndex}:${rotation}:${maxWidth}x${maxHeight}@${dpr}`;
+
+    // Only thumbnails (lazy) are cached; the large preview is rendered fresh.
+    const hit = lazy ? cachedThumb(doc, cacheKey) : null;
+    if (hit && hostRef.current) {
+      hostRef.current.replaceChildren(hit);
+      setState('done');
+      return;
+    }
     setState('loading');
 
     (async () => {
@@ -46,7 +85,6 @@ export function PageCanvas({ doc, pageIndex, rotation, maxWidth, maxHeight, lazy
       const angle = normalizeRotation(page.rotate + rotation);
       const base = page.getViewport({ scale: 1, rotation: angle });
       const scale = Math.min(maxWidth / base.width, maxHeight / base.height);
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const viewport = page.getViewport({ scale: scale * dpr, rotation: angle });
 
       // A fresh canvas per render avoids pdf.js "same canvas" errors when re-rendering quickly.
@@ -60,6 +98,7 @@ export function PageCanvas({ doc, pageIndex, rotation, maxWidth, maxHeight, lazy
 
       task = page.render({ canvasContext: ctx, viewport });
       await task.promise;
+      if (lazy) storeThumb(doc, cacheKey, canvas);
       if (cancelled || !hostRef.current) return;
       hostRef.current.replaceChildren(canvas);
       setState('done');
@@ -72,7 +111,7 @@ export function PageCanvas({ doc, pageIndex, rotation, maxWidth, maxHeight, lazy
       cancelled = true;
       task?.cancel();
     };
-  }, [visible, doc, pageIndex, rotation, maxWidth, maxHeight]);
+  }, [visible, doc, pageIndex, rotation, maxWidth, maxHeight, lazy]);
 
   return (
     <div className="page-canvas" style={{ width: maxWidth, height: maxHeight }}>

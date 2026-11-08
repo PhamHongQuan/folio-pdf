@@ -28,7 +28,9 @@ export function useTheme(): [Theme, () => void] {
   }, []);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
+    const root = document.documentElement;
+    root.dataset.theme = theme; // classic UI
+    root.classList.toggle('dark', theme === 'dark'); // ui-kit
   }, [theme]);
 
   const toggle = useCallback(() => {

@@ -137,9 +137,43 @@ input {
   color: var(--text);
 }
 
-/* On the landing page nothing else pushes the theme toggle to the right. */
-.logo + .theme-toggle {
+/* On the landing page nothing else pushes the UI switch / theme toggle to the right. */
+.logo + .ui-switch {
   margin-left: auto;
+}
+
+/* Classic ⇄ new (ui-kit) UI switch */
+.ui-switch {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.ui-switch button {
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.ui-switch button:hover:not(.active) {
+  color: var(--text);
+}
+
+.ui-switch button.active {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
 }
 
 .doc-name {

@@ -7,6 +7,9 @@ Web app giúp thủ quỹ siêu thị sắp xếp trang PDF ngay trên trình du
 - Bấm để chọn trang (Shift: chọn dải); thanh thao tác nổi: Xoay · Lên đầu · Xuống cuối · Xóa
 - Hoàn tác / Làm lại (Ctrl+Z / Ctrl+Y), phím Delete để xóa
 - Giao diện sáng / tối (mặc định theo hệ điều hành, ghi nhớ lựa chọn)
+- Hai bộ giao diện, chọn bằng nút **Cổ điển / Mới** trên thanh tiêu đề (ghi nhớ lựa chọn, chuyển
+  qua lại không mất tài liệu đang mở): giao diện gốc, và giao diện mới dựng bằng
+  [@nphuonha/ui-kit](https://ui.nphuonha.id.vn) (Base UI + Tailwind CSS v4)
 - Tải về dạng **PDF** hoặc **XML**
 - Nếu PDF có file đính kèm (ví dụ XML hóa đơn điện tử), có thể tải nguyên bản file đó
 
@@ -59,8 +62,12 @@ Lưu ý: đây là XML mô tả bố cục trang, **không phải** XML hóa đ�
 
 ```
 src/
-  App.tsx                 # Giao diện, lịch sử hoàn tác, xuất file
-  components/             # PageCard, PageCanvas (thumbnail), PreviewModal, Sheet, Icon
+  useFolio.ts             # Trạng thái + thao tác dùng chung: lịch sử hoàn tác, kéo thả, xuất file
+  App.tsx                 # Chọn giao diện, nhận file kéo thả
+  ClassicView.tsx         # Giao diện cổ điển (src/styles.css)
+  kit/KitView.tsx         # Giao diện mới bằng @nphuonha/ui-kit (src/kit/kit.css, tải lazy)
+  components/             # PageGrid, PageCard, PageCanvas (dùng chung), PreviewModal, Sheet, Icon
+  lib/uiMode.ts           # Lưu lựa chọn giao diện; mỗi giao diện chỉ nạp CSS của nó khi đang hiển thị
   lib/pdf.ts              # Đọc PDF, dựng PDF mới, kiểm tra toàn vẹn
   lib/aps.ts              # Xuất XML định dạng Aspose APS
   lib/sensors.ts          # Kéo thả cảm ứng (tay cầm ⠿ / nhấn giữ)

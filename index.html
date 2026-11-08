@@ -7,14 +7,22 @@
     <title>Folio — PDF Page Organizer</title>
     <meta name="description" content="Sắp xếp, xóa, xoay trang PDF và xuất PDF/XML ngay trên trình duyệt. Không tải file lên máy chủ." />
     <script>
-      // Apply the theme before first paint to avoid a flash (kept in sync by src/lib/theme.ts).
+      // Apply the theme and UI before first paint to avoid a flash
+      // (kept in sync by src/lib/theme.ts and src/lib/uiMode.ts).
       (function () {
-        var t = null;
-        try { t = localStorage.getItem('folio-theme'); } catch (e) {}
+        var t = null, ui = null, root = document.documentElement;
+        try { t = localStorage.getItem('folio-theme'); ui = localStorage.getItem('folio-ui'); } catch (e) {}
         if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        document.documentElement.dataset.theme = t;
+        root.dataset.theme = t;
+        if (t === 'dark') root.classList.add('dark');
+        if (ui === 'kit') root.dataset.ui = 'kit';
       })();
     </script>
+    <style>
+      /* Page background until the UI's own stylesheet loads. */
+      html { background: #f6f7f9; }
+      html.dark { background: #0e1116; }
+    </style>
   </head>
   <body>
     <div id="root"></div>
